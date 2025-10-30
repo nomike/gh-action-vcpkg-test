@@ -27,7 +27,7 @@ jobs:
         vcpkgJsonGlob: 'vcpkg.json'
         # Enable binary caching - this is key for performance!
         runVcpkgInstall: true
-
+        vcpkgGitCommitId: '74e6536215718009aae747d86d84b78376bf9e09'
     - name: Configure CMake
       run: |
         cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows -G "Visual Studio 17 2022" -A x64
