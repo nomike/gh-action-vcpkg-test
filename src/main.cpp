@@ -9,6 +9,7 @@ int main() {
         auto pWrapper = Lib3MF::CWrapper::loadLibrary();
         auto pModel = pWrapper->CreateModel();
         
+        std::cout << "Hello world!" << std::endl;
         std::cout << "lib3mf model created successfully!" << std::endl;
         std::cout << "Version: " << pWrapper->GetVersion() << std::endl;
         
