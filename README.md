@@ -82,26 +82,68 @@ Expected performance improvements:
 - **With caching**: 1-3 minutes per build (after first run)
 - **Cache hit ratio**: ~95% for unchanged dependencies
 
+## Understanding vcpkg Double Installation
+
+### Why Dependencies Install Twice
+
+You might notice vcpkg installing dependencies in two phases:
+
+1. **Setup vcpkg step**: When `runVcpkgInstall: true` is set
+2. **CMake configure step**: When CMake's vcpkg integration runs
+
+**Solution**: Set `runVcpkgInstall: false` in the workflow and let CMake handle the installation to avoid double work.
+
+### Cache Diagnostics Workflow
+
+Use the `cache-diagnostics.yml` workflow to analyze caching behavior:
+
+```bash
+# Run via GitHub Actions UI or CLI
+gh workflow run "vcpkg Cache Diagnostics"
+```
+
+This workflow will show:
+
+- Binary cache configuration status
+- Installation timing
+- Cache hit/miss information
+- Package installation logs
+
 ## Troubleshooting
 
 ### Cache Miss Issues
+
 If you're experiencing cache misses:
+
 1. Check if `vcpkg.json` was modified
 2. Verify the baseline hash is consistent
 3. Ensure triplet hasn't changed
+4. Confirm `VCPKG_BINARY_SOURCES` environment variable is set
+5. Check that GitHub Actions cache environment variables are exported
 
 ### Build Failures
+
 1. Check vcpkg baseline compatibility
 2. Verify MSVC version compatibility
 3. Review dependency constraints in vcpkg.json
+4. Run the cache diagnostics workflow to identify issues
+
+### Double Installation Issues
+
+1. Ensure `runVcpkgInstall: false` in the vcpkg setup step
+2. Let CMake handle dependency installation
+3. Check that binary caching is properly configured
 
 ## Advanced Configuration
 
 ### Custom Triplets
+
 You can create custom triplets in `triplets/` directory for specific build configurations.
 
 ### Binary Caching Backends
+
 vcpkg supports multiple binary cache backends:
+
 - GitHub Actions Cache (used here)
 - Azure Blob Storage
 - AWS S3

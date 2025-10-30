@@ -9,8 +9,13 @@ int main() {
         auto pWrapper = Lib3MF::CWrapper::loadLibrary();
         auto pModel = pWrapper->CreateModel();
         
+        std::cout << "Hello world!" << std::endl;
         std::cout << "lib3mf model created successfully!" << std::endl;
-        std::cout << "Version: " << pWrapper->GetVersion() << std::endl;
+        
+        // Get version information from the wrapper
+        Lib3MF_uint32 nMajor, nMinor, nMicro;
+        pWrapper->GetLibraryVersion(nMajor, nMinor, nMicro);
+        std::cout << "lib3mf Version: " << nMajor << "." << nMinor << "." << nMicro << std::endl;
         
         return 0;
     }

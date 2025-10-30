@@ -1,0 +1,155 @@
+name: vcpkg Cache Diagnostics
+
+on:
+  push:
+    branches: [ hello ]  # Run on our test branch
+    paths: 
+      - 'vcpkg.json'
+      - '.github/workflows/cache-diagnostics.yml'
+      - '.github/workflows/build.yml'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'vcpkg.json'
+      - '.github/workflows/**'
+  workflow_dispatch:  # Allow manual runs
+  schedule:
+    - cron: '0 12 * * 1'  # Weekly on Monday at noon UTC for cache cleanup testing
+
+env:
+  VCPKG_BINARY_SOURCES: 'clear;files,${{ github.workspace }}/vcpkg-cache,readwrite'
+
+jobs:
+  cache-diagnostics:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup vcpkg binary caching
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ github.workspace }}/vcpkg
+          ~/.cache/vcpkg
+          ~/AppData/Local/vcpkg
+          ${{ github.workspace }}/vcpkg-cache
+        key: vcpkg-diagnostics-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}-${{ hashFiles('vcpkg-configuration.json', '.git/modules/vcpkg/HEAD') }}
+        restore-keys: |
+          vcpkg-diagnostics-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}-
+          vcpkg-diagnostics-${{ runner.os }}-
+          vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}-
+          vcpkg-${{ runner.os }}-
+          
+    - name: Create vcpkg binary cache directory
+      run: mkdir -p ${{ github.workspace }}/vcpkg-cache
+      shell: bash
+
+    - name: Setup vcpkg
+      uses: lukka/run-vcpkg@v11
+      id: runvcpkg
+      with:
+        vcpkgDirectory: '${{ github.workspace }}/vcpkg'
+        vcpkgJsonGlob: 'vcpkg.json'
+        runVcpkgInstall: false
+        vcpkgGitCommitId: '74e6536215718009aae747d86d84b78376bf9e09'
+      env:
+        # Use filesystem-based binary caching
+        VCPKG_BINARY_SOURCES: 'clear;files,${{ github.workspace }}/vcpkg-cache,readwrite'
+
+    - name: Detailed Cache Analysis
+      shell: cmd
+      run: |
+        echo "===========================================" 
+        echo "           VCPKG CACHE DIAGNOSTICS"
+        echo "==========================================="
+        echo.
+        echo "=== Environment Variables ==="
+        echo VCPKG_BINARY_SOURCES=%VCPKG_BINARY_SOURCES%
+        echo VCPKG_DEFAULT_BINARY_CACHE=%VCPKG_DEFAULT_BINARY_CACHE%
+        echo.
+        echo "=== Cache Directory Status ==="
+        echo "Binary cache directory: ${{ github.workspace }}\vcpkg-cache"
+        dir "${{ github.workspace }}\vcpkg-cache" 2>nul && echo "Cache directory exists with contents" || echo "Cache directory is empty or does not exist"
+        echo.
+        echo "=== vcpkg Version and Config ==="
+        "${{ github.workspace }}\vcpkg\vcpkg.exe" version
+        echo.
+        echo "=== Manifest Mode Detection ==="
+        if exist "vcpkg.json" (
+          echo "MANIFEST MODE: vcpkg.json found - using manifest mode"
+          echo "Dependencies will be installed from vcpkg.json:"
+          type vcpkg.json
+        ) else (
+          echo "CLASSIC MODE: No vcpkg.json found - using classic mode"
+        )
+        echo.
+        echo "=== Initial Package List ==="
+        "${{ github.workspace }}\vcpkg\vcpkg.exe" list
+        echo.
+        echo "=== Cache Status ==="
+        echo "Filesystem cache location: ${{ github.workspace }}\vcpkg-cache"
+        if exist "${{ github.workspace }}\vcpkg-cache" (
+          echo "Cache files found:"
+          dir "${{ github.workspace }}\vcpkg-cache" /s 2>nul || echo "No cache files yet"
+        ) else (
+          echo "Cache directory does not exist yet"
+        )
+
+    - name: Install packages with timing (manifest mode)
+      shell: cmd
+      run: |
+        echo "=== Installing packages from vcpkg.json with detailed output ==="
+        echo "Manifest file contents:"
+        type vcpkg.json
+        echo.
+        echo Start Time: %TIME%
+        echo "Running: vcpkg install --triplet x64-windows --debug"
+        "${{ github.workspace }}\vcpkg\vcpkg.exe" install --triplet x64-windows --debug
+        echo End Time: %TIME%
+        echo.
+        echo "=== Post-install Package List ==="
+        "${{ github.workspace }}\vcpkg\vcpkg.exe" list
+
+    - name: Test CMake Integration
+      shell: cmd
+      run: |
+        echo "=== Testing CMake Integration ==="
+        echo Start Time: %TIME%
+        echo "CMake will use vcpkg manifest mode automatically"
+        cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}\vcpkg\scripts\buildsystems\vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows -G "Visual Studio 17 2022" -A x64 -DCMAKE_VERBOSE_MAKEFILE=ON
+        echo End Time: %TIME%
+        echo.
+        echo "=== Packages after CMake configure ==="
+        "${{ github.workspace }}\vcpkg\vcpkg.exe" list
+
+    - name: Final Cache Status
+      shell: cmd
+      run: |
+        echo "=== Final Cache Analysis ==="
+        echo "Installed packages:"
+        "${{ github.workspace }}\vcpkg\vcpkg.exe" list
+        echo.
+        echo "=== Cache Statistics ==="
+        echo "Binary cache directory size:"
+        if exist "${{ github.workspace }}\vcpkg-cache" (
+          dir "${{ github.workspace }}\vcpkg-cache" /s | find "File(s)"
+          echo "Cache files:"
+          dir "${{ github.workspace }}\vcpkg-cache" /b 2>nul | head -10 || echo "No cache files"
+        ) else (
+          echo "No cache directory found"
+        )
+        echo.
+        echo "=== Build Trees (temporary files) ==="
+        dir "${{ github.workspace }}\vcpkg\buildtrees" 2>nul | find "Directory" || echo "No buildtrees directory found"
+        echo.
+        echo "=== vcpkg_installed contents ==="
+        dir "vcpkg_installed" 2>nul | find "Directory" || echo "No vcpkg_installed directory found"
+        echo.
+        echo "=== Cache Effectiveness Analysis ==="
+        if exist "${{ github.workspace }}\vcpkg-cache\*.zip" (
+          echo "SUCCESS: Binary cache files found - caching is working!"
+        ) else (
+          echo "WARNING: No binary cache files found - caching may not be working"
+        )
