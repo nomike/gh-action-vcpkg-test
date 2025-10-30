@@ -22,6 +22,7 @@ jobs:
           ${{ github.workspace }}/vcpkg
           ~/.cache/vcpkg
           ~/AppData/Local/vcpkg
+          ${{ github.workspace }}/vcpkg-cache
         key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}-${{ hashFiles('vcpkg-configuration.json', '.git/modules/vcpkg/HEAD') }}
         restore-keys: |
           vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}-
@@ -57,20 +58,53 @@ jobs:
         echo.
         echo "=== Checking installed packages ==="
         "${{ github.workspace }}\vcpkg\vcpkg.exe" list
+
+    - name: Install vcpkg dependencies
+      shell: cmd
+      run: |
+        echo "=== Installing dependencies from vcpkg.json ==="
+        echo "Manifest file contents:"
+        type vcpkg.json
+        echo.
+        echo Start Time: %TIME%
+        "${{ github.workspace }}\vcpkg\vcpkg.exe" install --triplet x64-windows
+        echo End Time: %TIME%
+        echo.
+        echo "=== Dependencies installed successfully ==="
+        "${{ github.workspace }}\vcpkg\vcpkg.exe" list
+      env:
+        VCPKG_BINARY_SOURCES: 'clear;files,${{ github.workspace }}/vcpkg-cache,readwrite'
+
     - name: Configure CMake (with vcpkg integration)
       run: |
         echo "=== Starting CMake Configuration ==="
+        echo "Dependencies should already be installed, CMake should be fast now..."
         cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows -G "Visual Studio 17 2022" -A x64 -DCMAKE_VERBOSE_MAKEFILE=ON
+      env:
+        VCPKG_BINARY_SOURCES: 'clear;files,${{ github.workspace }}/vcpkg-cache,readwrite'
         
-    - name: Show installed packages after CMake
+    - name: Verify no additional packages were installed by CMake
       shell: cmd
       run: |
-        echo "=== Packages installed after CMake configure ==="
+        echo "=== Packages after CMake configure (should be same as before) ==="
         "${{ github.workspace }}\vcpkg\vcpkg.exe" list
+        echo.
+        echo "=== Binary cache effectiveness check ==="
+        if exist "${{ github.workspace }}\vcpkg-cache\*.zip" (
+          echo "SUCCESS: Binary cache files found!"
+          dir "${{ github.workspace }}\vcpkg-cache" /b | find /c ".zip"
+          echo "cache files created"
+        ) else (
+          echo "INFO: No binary cache files found (may be first run)"
+        )
 
     - name: Build
       run: |
+        echo "=== Building application ==="
+        echo Start Time: $((Get-Date).ToString('HH:mm:ss.fff'))
         cmake --build build --config Release --verbose
+        echo End Time: $((Get-Date).ToString('HH:mm:ss.fff'))
+      shell: powershell
 
     - name: Test executable
       run: |
