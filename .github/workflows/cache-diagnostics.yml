@@ -1,0 +1,87 @@
+name: vcpkg Cache Diagnostics
+
+on:
+  workflow_dispatch:
+
+env:
+  VCPKG_BINARY_SOURCES: 'clear;x-gha,readwrite'
+
+jobs:
+  cache-diagnostics:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Export GitHub Actions cache environment variables
+      uses: actions/github-script@v7
+      with:
+        script: |
+          core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+          core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
+    - name: Setup vcpkg
+      uses: lukka/run-vcpkg@v11
+      id: runvcpkg
+      with:
+        vcpkgDirectory: '${{ github.workspace }}/vcpkg'
+        vcpkgJsonGlob: 'vcpkg.json'
+        runVcpkgInstall: false
+        vcpkgGitCommitId: '74e6536215718009aae747d86d84b78376bf9e09'
+
+    - name: Detailed Cache Analysis
+      shell: cmd
+      run: |
+        echo "===========================================" 
+        echo "           VCPKG CACHE DIAGNOSTICS"
+        echo "==========================================="
+        echo.
+        echo "=== Environment Variables ==="
+        echo VCPKG_BINARY_SOURCES=%VCPKG_BINARY_SOURCES%
+        echo ACTIONS_CACHE_URL=%ACTIONS_CACHE_URL%
+        echo ACTIONS_RUNTIME_TOKEN_EXISTS=%ACTIONS_RUNTIME_TOKEN:~0,10%...
+        echo.
+        echo "=== vcpkg Version and Config ==="
+        "${{ github.workspace }}\vcpkg\vcpkg.exe" version
+        echo.
+        echo "=== Binary Cache Configuration ==="
+        "${{ github.workspace }}\vcpkg\vcpkg.exe" x-add-version --dry-run 2>nul || echo "No packages to check"
+        echo.
+        echo "=== Initial Package List ==="
+        "${{ github.workspace }}\vcpkg\vcpkg.exe" list
+        echo.
+        echo "=== Available Cached Packages ==="
+        "${{ github.workspace }}\vcpkg\vcpkg.exe" x-cache list || echo "Cache list not available"
+
+    - name: Install lib3mf with timing
+      shell: cmd
+      run: |
+        echo "=== Installing lib3mf with detailed output ==="
+        echo Start Time: %TIME%
+        "${{ github.workspace }}\vcpkg\vcpkg.exe" install lib3mf:x64-windows --debug
+        echo End Time: %TIME%
+        echo.
+        echo "=== Post-install Package List ==="
+        "${{ github.workspace }}\vcpkg\vcpkg.exe" list
+
+    - name: Test CMake Integration
+      shell: cmd
+      run: |
+        echo "=== Testing CMake Integration ==="
+        echo Start Time: %TIME%
+        cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}\vcpkg\scripts\buildsystems\vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows -G "Visual Studio 17 2022" -A x64 --debug-output
+        echo End Time: %TIME%
+
+    - name: Final Cache Status
+      shell: cmd
+      run: |
+        echo "=== Final Cache Analysis ==="
+        echo "Installed packages:"
+        "${{ github.workspace }}\vcpkg\vcpkg.exe" list
+        echo.
+        echo "Cache stats (if available):"
+        dir "${{ github.workspace }}\vcpkg\buildtrees" 2>nul || echo "No buildtrees directory found"
+        echo.
+        echo "vcpkg_installed contents:"
+        dir "vcpkg_installed" 2>nul || echo "No vcpkg_installed directory found"

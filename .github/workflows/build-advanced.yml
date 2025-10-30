@@ -45,17 +45,25 @@ jobs:
       with:
         vcpkgDirectory: '${{ github.workspace }}/vcpkg'
         vcpkgJsonGlob: 'vcpkg.json'
-        runVcpkgInstall: true
+        # Let CMake handle the installation to avoid double installation
+        runVcpkgInstall: false
         vcpkgGitCommitId: '74e6536215718009aae747d86d84b78376bf9e09'
 
     - name: Configure CMake
       run: |
+        echo "=== Cache Status Before CMake ==="
+        & "${{ github.workspace }}\vcpkg\vcpkg.exe" list
+        echo ""
+        echo "=== Starting CMake Configuration ==="
         cmake -B build -S . `
           -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" `
           -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} `
           -G "${{ matrix.generator }}" `
           -A ${{ matrix.arch }} `
           -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+        echo ""
+        echo "=== Cache Status After CMake ==="
+        & "${{ github.workspace }}\vcpkg\vcpkg.exe" list
 
     - name: Build
       run: |
