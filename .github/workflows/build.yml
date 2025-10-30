@@ -1,0 +1,41 @@
+name: Build with MSVC and vcpkg
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Setup vcpkg
+      uses: lukka/run-vcpkg@v11
+      with:
+        # This is the default location where vcpkg is installed by the action
+        vcpkgDirectory: '${{ github.workspace }}/vcpkg'
+        # This is the default location where vcpkg generates the build files
+        vcpkgJsonGlob: 'vcpkg.json'
+        # Enable binary caching - this is key for performance!
+        runVcpkgInstall: true
+
+    - name: Configure CMake
+      run: |
+        cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows -G "Visual Studio 17 2022" -A x64
+
+    - name: Build
+      run: |
+        cmake --build build --config Release
+
+    - name: Test executable
+      run: |
+        ./build/bin/Release/vcpkg-test-app.exe

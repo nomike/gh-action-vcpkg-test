@@ -1,0 +1,8 @@
+{
+  "name": "vcpkg-test-app",
+  "version": "1.0.0",
+  "dependencies": [
+    "lib3mf"
+  ],
+  "builtin-baseline": "3508985146f1b1d248c47943079a5ac4a952b4af"
+}
