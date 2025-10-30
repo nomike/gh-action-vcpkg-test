@@ -76,6 +76,15 @@ jobs:
         echo "=== vcpkg Version and Config ==="
         "${{ github.workspace }}\vcpkg\vcpkg.exe" version
         echo.
+        echo "=== Manifest Mode Detection ==="
+        if exist "vcpkg.json" (
+          echo "MANIFEST MODE: vcpkg.json found - using manifest mode"
+          echo "Dependencies will be installed from vcpkg.json:"
+          type vcpkg.json
+        ) else (
+          echo "CLASSIC MODE: No vcpkg.json found - using classic mode"
+        )
+        echo.
         echo "=== Initial Package List ==="
         "${{ github.workspace }}\vcpkg\vcpkg.exe" list
         echo.
@@ -88,12 +97,16 @@ jobs:
           echo "Cache directory does not exist yet"
         )
 
-    - name: Install lib3mf with timing
+    - name: Install packages with timing (manifest mode)
       shell: cmd
       run: |
-        echo "=== Installing lib3mf with detailed output ==="
+        echo "=== Installing packages from vcpkg.json with detailed output ==="
+        echo "Manifest file contents:"
+        type vcpkg.json
+        echo.
         echo Start Time: %TIME%
-        "${{ github.workspace }}\vcpkg\vcpkg.exe" install lib3mf:x64-windows --debug
+        echo "Running: vcpkg install --triplet x64-windows --debug"
+        "${{ github.workspace }}\vcpkg\vcpkg.exe" install --triplet x64-windows --debug
         echo End Time: %TIME%
         echo.
         echo "=== Post-install Package List ==="
@@ -104,8 +117,12 @@ jobs:
       run: |
         echo "=== Testing CMake Integration ==="
         echo Start Time: %TIME%
-        cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}\vcpkg\scripts\buildsystems\vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows -G "Visual Studio 17 2022" -A x64 --debug-output
+        echo "CMake will use vcpkg manifest mode automatically"
+        cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}\vcpkg\scripts\buildsystems\vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows -G "Visual Studio 17 2022" -A x64 -DCMAKE_VERBOSE_MAKEFILE=ON
         echo End Time: %TIME%
+        echo.
+        echo "=== Packages after CMake configure ==="
+        "${{ github.workspace }}\vcpkg\vcpkg.exe" list
 
     - name: Final Cache Status
       shell: cmd
